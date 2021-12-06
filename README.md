@@ -7,6 +7,7 @@
 ## 使い方
   配布アーカイブに同梱されているサンプルプロジェクトText2EPubを参照してください。
   尚、EPUBファイル作成のためにはzip.exeが必要となりますので、下のIRLから入手してインストールして下さい。
+  
   https://sourceforge.net/projects/gnuwin32/files/zip/3.0/
   
 ## ライセンス
