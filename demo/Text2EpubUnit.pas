@@ -226,7 +226,11 @@ begin
         end else begin
           chap1 := '';
           chap2 := c2;
-        end;   // 改ページを各ページの最後とする
+        end;
+      end else if Pos(AO_KKR, tmp) > 0 then
+      begin
+        ; // スキップする
+      // 改ページを各ページの最後とする
       end else if Pos(AO_PB2, tmp) > 0 then
       begin
         // 青空文庫タグをHTMLタグに変換する
