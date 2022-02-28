@@ -2,7 +2,7 @@ object Form1: TForm1
   Left = 0
   Top = 0
   Caption = 'Text2Epub'
-  ClientHeight = 145
+  ClientHeight = 142
   ClientWidth = 573
   Color = clBtnFace
   Font.Charset = ANSI_CHARSET

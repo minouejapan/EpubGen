@@ -1,4 +1,4 @@
-(*
+﻿(*
 
   EPUB作成ユニットEpubGenのサンプルアプリケーション
 
@@ -15,6 +15,10 @@
   フリーソフトです。個人、業務に関わらず、どなたでも自由に使用することが出来ます
   が、使用に当たって発生したいかなる不具合に対してもいっさいの保証はしません。
   尚、ソースコードの流用・改変含めて自由です。
+
+修正履歴
+  2022/02/28 前書きが二重に生成されていた不具合を修正
+             HTML特殊文字のエスケープ処理を追加
 
 *)
 unit Text2EpubUnit;
@@ -92,6 +96,32 @@ const
 
 
 
+// テキスト中のHTML特殊文字をエスケープする
+function ReplaceSpecialChar(Text: string): string;
+var
+  tmp: string;
+begin
+  Result := '';
+
+  // 特殊文字のエスケープ
+  tmp := StringReplace(Text, '&', '&amp;',    [rfReplaceAll]);
+  tmp := StringReplace(tmp,  '<', '&lt;',     [rfReplaceAll]);
+  tmp := StringReplace(tmp,  '>', '&gt;',     [rfReplaceAll]);
+  tmp := StringReplace(tmp,  '"', '&quot;',   [rfReplaceAll]);
+  tmp := StringReplace(tmp,  '\', '&yen;',    [rfReplaceAll]);
+  tmp := StringReplace(tmp,  '|', '&#166;',   [rfReplaceAll]);
+  tmp := StringReplace(tmp,  '©', '&copy;',   [rfReplaceAll]);
+  tmp := StringReplace(tmp,  '®', '&reg;',    [rfReplaceAll]);
+  tmp := StringReplace(tmp,  '°', '&deg;',    [rfReplaceAll]);
+  tmp := StringReplace(tmp,  '±', '&plusmn;', [rfReplaceAll]);
+  tmp := StringReplace(tmp,  '×', '&times;',  [rfReplaceAll]);
+  tmp := StringReplace(tmp,  '÷', '&dvide;',  [rfReplaceAll]);
+  tmp := StringReplace(tmp,  '´', '&acute;',  [rfReplaceAll]);
+  tmp := StringReplace(tmp,  'µ', '&micro;',  [rfReplaceAll]);
+
+  Result := tmp;
+end;
+
 // 青空文庫タグをHTMLタグに変換する（見出しと改ページは変換しない）
 function ReplaceTags(Text: string): string;
 var
@@ -143,12 +173,13 @@ begin
   try
     // 拙作ダウンローダーが出力する形式に沿って処理する
     // ※タイトル・作者、前書き、各話それぞれの最後にある［＃改ページ］を区切りとする
+    // 行単位で解析して［＃改ページ］をトリガーにして各話を分離する
     chap1 := '';
     chap2 := '';
-    // 行単位で解析して［＃改ページ］をトリガーにして各話を分離する
     for i := n to Text.Count - 1 do
     begin
-      tmp := Text[i];
+      tmp := ReplaceSpecialChar(Text[i]);
+
       if Pos(AO_KKL, tmp) > 0 then // 前書き（前書きはタイトルがないので「前書き」をタイトルにする）
       begin
         chap1 := '';
@@ -195,8 +226,8 @@ begin
         end else begin
           chap1 := '';
           chap2 := c2;
-        end;                                // 前書き終わりまたは改ページ：各話の最後
-      end else if (Pos(AO_KKR, tmp) > 0) or (Pos(AO_PB2, tmp) > 0) then
+        end;   // 改ページを各ページの最後とする
+      end else if Pos(AO_PB2, tmp) > 0 then
       begin
         // 青空文庫タグをHTMLタグに変換する
         page.Text := ReplaceTags(page.Text);
@@ -207,6 +238,8 @@ begin
         EPubAddPage(ep);
         Application.ProcessMessages;
         page.Clear;
+        ep.Chapter := '';
+        ep.Section := '';
       end else begin
         page.Add(tmp + '<br />');
       end;
