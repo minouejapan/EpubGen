@@ -1,4 +1,4 @@
-(*
+﻿(*
   EPUB作成用ユニットEpubGen
 
   このユニットは電子書籍用フォーマットであるEPUB3.2仕様に準拠した日本語縦書き用
@@ -55,6 +55,7 @@
 
 
   更新の履歴
+    Ver1.1  2022/02/28  章・話に階層化した目次の生成が不完全だった不具合を修正
     Ver1.0  2021/10/30  最初のバージョン
 *)
 unit EpubGen;
@@ -116,10 +117,14 @@ const
             + '    <nav epub:type="toc">'#13#10
             + '      <ol>';
 
-  NAVMID1   = '        <li><a href="Text/titlepage.xhtml">表紙</a></li>'#13#10;
+  NAVTITLE  = '        <li><a href="Text/chap1.xhtml">表紙</a></li>';
+  NAVINTRO  = '        <li><a href="Text/chap2.xhtml">前書き</a></li>';
 
-  NAVCHAP1  = '      <li><a href="Text/chap';
-  NAVCHAP2  = '        <li><a href="Text/chap';
+  NAVCHAP1  = '        <li><a href="Text/chap';
+  NAVCHAP2  = '            <li><a href="Text/chap';
+  NAVSECBG  = '          <ol>';
+  NAVSECED  = '          </ol>'#13#10'        </li>';
+
   NAVCPMID  = '.xhtml">';
   NAVCPTL1  = '</a>';
   NAVCPTL2  = '</a></li>';
@@ -461,9 +466,32 @@ begin
     if IsCoverImg then
       opf.Text := Opf.Text + OPFCOVER;
     // navファイルのヘッダー部分を作成する
+    // 目次が章と話で構成されている場合は
+    //                     <ol>
+    // ・表紙                <li><a href="Text/chap1.xhtml">表紙</a></li>
+    // ・前書き（あれば）    <li><a href="Text/chap2.xhtml">前書き</a></li>
+    // ▷章                  <li><a href="Text/chap4.xhtml">第一章</a>
+    //                         <ol>
+    //   ・話                    <li><a href="Text/chap4.xhtml">第1話</a></li>
+    //   ・話                    <li><a href="Text/chap4.xhtml">第2話</a></li>
+    //                         </ol>
+    //                       </li>
+    //                     </ol>
+    // とし、話見出しだけの構成であれば
+    //                     <ol>
+    // ・表紙                <li><a href="Text/chap1.xhtml">表紙</a></li>
+    // ・前書き（あれば）    <li><a href="Text/chap2.xhtml">前書き</a></li>
+    // ・話                  <li><a href="Text/chap4.xhtml">第1話</a></li>
+    // ・話                  <li><a href="Text/chap4.xhtml">第2話</a></li>
+    //                     </ol>
+    // とする
+
     nav.Text := NAVHEAD;
     cf := False;
-    for i := 1 to Chapter.Count do
+    // 表紙を追加する
+    nav.Add(NAVTITLE);
+    opf.Add(OPFCHAPL + '1' + OPFCHAPM + '1' + OPFCHAPR);
+    for i := 2 to Chapter.Count do
     begin
       cn := IntToStr(i);
       // opfファイルに各話（チャプター）情報を追加する
@@ -472,29 +500,26 @@ begin
       ct.CommaText := Chapter[i - 1];
       if ct.Count = 1 then
         ct.Add('');
-      // 表紙(Chap1)の場合
-      if i = 1 then
-      begin
-        // 目次が章・話に分かれているかどうかで最初のページ（表紙）を追加する階層を決める
-        if ChapNested then
-          nav.Add(NAVCHAP1 + cn + NAVCPMID + ct[1] + NAVCPTL1)
-        else
+      // 前書きがある場合
+      if (i = 2) and (ct[1] = '前書き')then
+        nav.Add(NAVINTRO)
+      else begin
+        // 表紙または大見出しがある（目次を階層化する）
+        if ct[0] <> '' then
+        begin
+          // 既に大見出し内に入っていれば、前の大見出し階層から抜ける
+          if cf then
+            nav.Add(NAVSECED);
+          // 新しい大見出しの階層に入る
+          nav.Add(NAVCHAP1 + cn + NAVCPMID + ct[0] + NAVCPTL1);
+          nav.Add(NAVSECBG);
           nav.Add(NAVCHAP2 + cn + NAVCPMID + ct[1] + NAVCPTL2);
-      // 表紙または大見出しがある（目次を階層化する）
-      end else if ct[0] <> '' then
-      begin
-        // 既に大見出し内に入っていれば、前の大見出し階層から抜ける
-        if cf then
-          nav.Add(NAVSEPL1);
-        // 新しい大見出しの階層に入る
-        nav.Add(NAVCHAP1 + cn + NAVCPMID + ct[0] + NAVCPTL1);
-        nav.Add(NAVSEPL2);
-        nav.Add(NAVCHAP2 + cn + NAVCPMID + ct[1] + NAVCPTL2);
-        cf := True;
-      // 中見出しだけを追加
-      end else if ct[1] <> '' then
-      begin
-        nav.Add(NAVCHAP2 + cn + NAVCPMID + ct[1] + NAVCPTL2);
+          cf := True;
+        // 中見出しだけを追加
+        end else if ct[1] <> '' then
+        begin
+          nav.Add(NAVCHAP2 + cn + NAVCPMID + ct[1] + NAVCPTL2);
+        end;
       end;
     end;
     // opfファイルのページ情報を構築する
@@ -511,10 +536,19 @@ begin
       opf.Add(OPFITEML + IntToStr(i) + OPFITEMR);
     // opf/navファイルのフッター部分を追加する
     opf.Text := opf.Text + OPFTAIL;
-    if IsCoverImg then
-      nav.Text := nav.Text + NAVMID + NAVCOVER + NAVTAIL
-    else
-      nav.Text := nav.Text + NAVMID + NAVTAIL;
+    // 大見出しがあれば<li>タグを</li>で閉じる
+    if cf then
+    begin
+      if IsCoverImg then
+        nav.Text := nav.Text + NAVSECED + #13#10 + NAVMID + #13#10 + NAVCOVER + NAVTAIL
+      else
+        nav.Text := nav.Text + NAVSECED + #13#10 + NAVMID + #13#10 + NAVTAIL;
+    end else begin
+      if IsCoverImg then
+        nav.Text := nav.Text + NAVMID + NAVCOVER + NAVTAIL
+      else
+        nav.Text := nav.Text + NAVMID + NAVTAIL;
+    end;
 
     opf.WriteBOM := False;
     nav.WriteBOM := False;
