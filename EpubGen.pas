@@ -55,6 +55,7 @@
 
 
   更新の履歴
+    Ver1.2  2022/03/24  System.zipを使用することでzip.exeを不要とした
     Ver1.1  2022/02/28  章・話に階層化した目次の生成が不完全だった不具合を修正
     Ver1.0  2021/10/30  最初のバージョン
 *)
@@ -66,7 +67,8 @@ uses
 {$WARN UNIT_PLATFORM OFF}
 	Vcl.FileCtrl,
 {$WARN UNIT_PLATFORM ON}
-  Winapi.Windows, System.SysUtils, System.Classes, Vcl.StdCtrls, Winapi.Shellapi, System.DateUtils;
+  Winapi.Windows, System.SysUtils, System.Classes, Vcl.StdCtrls, Winapi.Shellapi, System.DateUtils,
+  System.Zip;
 
 type
   // InitializeEpub用
@@ -89,8 +91,6 @@ procedure EPubAddPage(Episode: TEpisInfo);        // 一話分の情報を追加
 procedure EpubAddImage(ImageFile: string);        // 挿絵画像ファイルをEpubフォルダに追加する
 procedure FinalizeEpub;                           // Epubを完成させる
 
-var
-  ZipPath: string;      // ZIP.EXEのパス
 
 implementation
 
@@ -231,6 +231,7 @@ var
   EpubMetaInf,          // META-INFフォルダ
   Uuid,                 // UUID(GUID)
   CreateTime: string;   // 作成日時
+  EpubFiles,            // Epubに保存するファイルリスト
   ChapLbl,              // チャプターラベル名
   Chapter: TStringList; // チャプタータイトル名
   ChapNo: integer;      // チャプター番号
@@ -293,6 +294,10 @@ begin
     sl.Text := BODYHEAD + '表紙' + COVERHEAD + Title + COVERMID + Auther + COVERTAIL;
     sl.WriteBOM := False;
     sl.SaveToFile(EpubText + '\chap1.xhtml', TEncoding.UTF8);
+    // Epub(zip)に保存するファイルリストを準備する
+    // zip書庫内に格納するフォルダデリミタはWindowsの\だとEpubリーダー側が読めないのでLinux形式の
+    // /を使用する
+    EpubFiles.Add('"' + EpubText + '\chap1.xhtml",OEBPS/Text/chap1.xhtml');
   finally
     sl.Free;
   end;
@@ -320,8 +325,10 @@ begin
   if EpubInfo.Title = '' then
     Exit;
 
+  // 各リストと変数を初期化する
   Chapter.Clear;
   Chaplbl.Clear;
+  EpubFiles.Clear;
   ChapNo        := 2;
   ChapNested    := False;
   IsCoverImg    := False;
@@ -368,12 +375,12 @@ begin
   finally
     fs.Free;
   end;
-  // 表紙を構築する
-  CreateCover(EpubInfo.Title, EpubInfo.Auther);
   // 入力ファイルと同じフォルダにcover.jpgがあれば表紙画像を追加する
   if FileExists(EpubInfo.CoverImage) then
     CreateCoverImage(EpubInfo.CoverImage);
   // container.xmlとstyle.cssを保存する（UTF-8 BOMなしで書き込む）
+  // Epub(zip)に保存するファイルリストを準備する
+  EpubFiles.Add('"' + EpubBase + '\mimetype",mimetype');
   sl := TStringList.Create;
   try
     sl.Text := CONTAINER;
@@ -382,13 +389,20 @@ begin
     sl.Text := STYLECSS;
     sl.WriteBOM := False;
     sl.SaveToFile(EpubCss + '\style.css', TEncoding.UTF8);
+    // Epub(zip)に保存するファイルリストを準備する
+    EpubFiles.Add('"' + EpubMetaInf + '\container.xml",META-INF/container.xml');
+    EpubFiles.Add('"' + EpubCss     + '\style.css",OEBPS/Styles/style.css');
     // 表紙画像があればtitlepage.xhtmlをコピーする
     if IsCoverImg then
     begin
       sl.Text := TITLEPAGE;
       sl.WriteBOM := False;
       sl.SaveToFile(EpubText + '\titlepage.xhtml', TEncoding.UTF8);
+      // Epub(zip)に保存するファイルリストを準備する
+      EpubFiles.Add('"' + EpubText    + '\titlepage.xhtml",OEBPS/Text/titlepage.xhtml');
     end;
+    // 表紙を構築する
+    CreateCover(EpubInfo.Title, EpubInfo.Auther);
   finally
     sl.Free;
   end;
@@ -407,21 +421,26 @@ end;
 procedure EPubAddPage(Episode: TEpisInfo);
 var
   sl: TStringList;
-  s: string;
+  s, title: string;
 begin
   if ChapNo = 0 then    // 初期化されていない
     Exit;
-  if Episode.Section = '' then // 空のページ
-    Exit;
-  if Episode.Chapter <> '' then
+  if (Episode.Chapter <> '') and (Episode.Section <> '') then
     ChapNested := True;
+  if Episode.Section = '' then
+    title := Episode.Chapter
+  else
+    title := Episode.Section;
   sl := TStringList.Create;
   try
-    s := BODYHEAD + Episode.Section + BODYMID + Episode.Episode + BODYTAIL;
+    s := BODYHEAD + title + BODYMID + Episode.Episode + BODYTAIL;
     sl.Text := s;
     sl.WriteBOM := False;
     sl.SaveToFile(EpubText + '\chap' + IntToStr(ChapNo) + '.xhtml', TEncoding.UTF8);
-    Chapter.Add(Episode.Chapter + ',' + Episode.Section);
+    // Epub(zip)に保存するファイルリストを準備する
+    EpubFiles.Add('"' + EpubText + '\chap' + IntToStr(ChapNo) + '.xhtml",OEBPS/Text/chap' + IntToStr(ChapNo) + '.xhtml');
+
+    Chapter.Add('"' + Episode.Chapter + '","' + Episode.Section + '"');   // 半角スペース等のデリミタ文字が含まれている場合を想定して""で括る
     ChapLbl.Add('Chap' + IntToStr(ChapNo));
     Inc(ChapNo);
   finally
@@ -433,7 +452,11 @@ end;
 procedure EpubAddImage(ImageFile: string);
 begin
   if DirectoryExists(EpubImage) then
+  begin
     CopyFile(PWideChar(ImageFile), PWideChar(EpubImage + '\' + ExtractFileName(ImageFile)), False);
+    // Epub(zip)に保存するファイルリストを準備する
+    EpubFiles.Add('"' + EpubImage + '\' + ExtractFileName(ImageFile) + '","OEBPS/Images/' + ExtractFileName(ImageFile) + '"');
+  end;
 end;
 
 // 最終処理
@@ -445,8 +468,8 @@ var
   i: integer;
   cn: string;
   cf: boolean;
-	SI: TStartupInfo;
-  SXInfo: TShellExecuteInfo;
+  zip: TZipFile;
+  zipfile: TStringList;
 begin
   if ChapNo = 0 then    // 初期化されていない
     Exit;
@@ -555,34 +578,30 @@ begin
     opf.SaveToFile(EpubEpub + '\book.opf',  TEncoding.UTF8);
     nav.SaveToFile(EpubEpub + '\nav.xhtml', TEncoding.UTF8);
 
-    // zip.exe実行準備
-    FillChar(SI, SizeOf(SI), #0);
-    SI.cb          := SizeOf(TStartupInfo);
-    SI.dwFlags     := STARTF_USESHOWWINDOW;
-    SI.wShowWindow := SW_HIDE;
-    with SXInfo do//TShellExecuteInfo構造体の初期化
-    begin
-      cbSize := SizeOf( SXInfo);
-      fMask  := SEE_MASK_NOCLOSEPROCESS;//これがないと終了待ち出来ない
-      Wnd    := GetStdHandle(STD_OUTPUT_HANDLE);
-      lpVerb := 'open';
-      lpFile := PChar(ZipPath);
-      lpParameters := PWideChar('-X -0 ' + EPubName + ' mimetype');
-      lpDirectory  := PWideChar(EPubBase);
-      nShow := SW_HIDE;
+    // Epub(zip)に保存するファイルリストを準備する
+    EpubFiles.Add('"' + EpubEpub + '\book.opf",OEBPS/book.opf');
+    EpubFiles.Add('"' + EpubEpub + '\nav.xhtml",OEBPS/nav.xhtml');
+
+    // TZipFileを使用してEPUBファイルを構築する
+    zip := TZipFile.Create;
+    zipfile := TStringList.Create;
+    try
+      zip.Open(EpubName, zmWrite);
+      // mimetypeを無圧縮で格納する
+      zipfile.CommaText := EpubFiles[0];
+      // mimetypeを最初に無圧縮で格納する
+      zip.Add(zipfile[0], zipfile[1], zcStored);
+      // その他のファイルを圧縮して格納する
+      for i := 1 to EPubFiles.Count - 1 do
+      begin
+        zipfile.CommaText := EpubFiles[i];
+        zip.Add(zipfile[0], zipfile[1], zcDeflate);
+      end;
+      zip.Close;
+    finally
+      zipfile.Free;
+      zip.Free;
     end;
-    // 最初にmimetypeファイルを無圧縮でepubファイルに追加する
-    if ShellExecuteEx(@SXInfo) then   // 起動失敗
-      //起動したアプリケーションの終了待ち
-      while WaitForSingleObject(SXInfo.hProcess, 0) = WAIT_TIMEOUT do
-        Sleep(200);
-    // 続いて残りの全てのファイルを圧縮して追加する
-    // 作成されたZIPファイルに拡張属性が含まれていると
-    SXInfo.lpParameters := PWideChar('-X -r9 ' + EPubName + ' * -x mimetype');
-    if ShellExecuteEx(@SXInfo) then   // 起動失敗
-      //起動したアプリケーションの終了待ち
-      while WaitForSingleObject(SXInfo.hProcess, 0) = WAIT_TIMEOUT do
-        Sleep(200);
   finally
     opf.Free;
     nav.Free;
@@ -592,13 +611,14 @@ end;
 
 // 初期化
 initialization
-  Chapter := TStringList.Create;  // 各話情報構築用に生成
-  ChapLbl := TStringList.Create;  // 各話情報構築用に生成
-  ZipPath := 'zip.exe';           // 初期値
+  Chapter   := TStringList.Create;  // 各話情報構築用に生成
+  ChapLbl   := TStringList.Create;  // 各話情報構築用に生成
+  EpubFiles := TStringList.Create;  // Epub保存ファイルリスト用に生成
 
 // TStringListの破棄
 finalization
   Chapter.Free;
   ChapLbl.Free;
+  EpubFiles.Free;
 
 end.
