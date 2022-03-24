@@ -9,6 +9,8 @@
 
   あくまでもサンプルプロジェクトであるため、拙作ダウンローダーが吐き出す青空
   文庫（風）タグの一部にしか対応していませんし最低限の処理しか行っていません
+  またEpubGen側には表紙絵や挿絵処理がありますが、このサンプルでは挿絵をダウン
+  ロードしてEPub内に格納するような処理は行っていません
 
 
 ライセンス
@@ -17,6 +19,10 @@
   尚、ソースコードの流用・改変含めて自由です。
 
 修正履歴
+  2922/03/24 EpubGenでTZipFileを使用するように変更したため、zip.exeの場所指定を削除した
+             最後の起動状況を保存して次回起動時に復元するようにした（text2Epub.exeと同じ場所に
+             text2Epub.iniファイルを作成するので書込み可能なフォルダにtext2Epub.exeを置く必要が
+             ある・・・例えばC:\text2Epubフォルダ等）
   2022/02/28 前書きが二重に生成されていた不具合を修正
              HTML特殊文字のエスケープ処理を追加
 
@@ -30,7 +36,7 @@ uses
 	Vcl.FileCtrl,
 {$WARN UNIT_PLATFORM ON}
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls;
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, System.IniFiles;
 
 type
   TForm1 = class(TForm)
@@ -44,17 +50,14 @@ type
     Button3: TButton;
     Label3: TLabel;
     Status: TLabel;
-    Label4: TLabel;
-    ZipExe: TEdit;
-    Button4: TButton;
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
     procedure Button3Click(Sender: TObject);
-    procedure Button4Click(Sender: TObject);
-    procedure ZipExeExit(Sender: TObject);
+    procedure FormCreate(Sender: TObject);
+    procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
   private
     { Private 宣言 }
-    procedure PerseText(Text: TStringList; CoverImage: string);
+    function PerseText(Text: TStringList; CoverImage: string): Boolean;
   public
     { Public 宣言 }
   end;
@@ -110,14 +113,15 @@ begin
   tmp := StringReplace(tmp,  '"', '&quot;',   [rfReplaceAll]);
   tmp := StringReplace(tmp,  '\', '&yen;',    [rfReplaceAll]);
   tmp := StringReplace(tmp,  '|', '&#166;',   [rfReplaceAll]);
-  tmp := StringReplace(tmp,  '©', '&copy;',   [rfReplaceAll]);
-  tmp := StringReplace(tmp,  '®', '&reg;',    [rfReplaceAll]);
-  tmp := StringReplace(tmp,  '°', '&deg;',    [rfReplaceAll]);
-  tmp := StringReplace(tmp,  '±', '&plusmn;', [rfReplaceAll]);
-  tmp := StringReplace(tmp,  '×', '&times;',  [rfReplaceAll]);
-  tmp := StringReplace(tmp,  '÷', '&dvide;',  [rfReplaceAll]);
-  tmp := StringReplace(tmp,  '´', '&acute;',  [rfReplaceAll]);
-  tmp := StringReplace(tmp,  'µ', '&micro;',  [rfReplaceAll]);
+  //エスケープするとエラーになるようなので無効化しておく
+  //tmp := StringReplace(tmp,  '©', '&copy;',   [rfReplaceAll]);
+  //tmp := StringReplace(tmp,  '®', '&reg;',    [rfReplaceAll]);
+  //tmp := StringReplace(tmp,  '°', '&deg;',    [rfReplaceAll]);
+  //tmp := StringReplace(tmp,  '±', '&plusmn;', [rfReplaceAll]);
+  //tmp := StringReplace(tmp,  '×', '&times;',  [rfReplaceAll]);
+  //tmp := StringReplace(tmp,  '÷', '&dvide;',  [rfReplaceAll]);
+  //tmp := StringReplace(tmp,  '´', '&acute;',  [rfReplaceAll]);
+  //tmp := StringReplace(tmp,  'µ', '&micro;',  [rfReplaceAll]);
 
   Result := tmp;
 end;
@@ -136,7 +140,7 @@ begin
   tmp := StringReplace(tmp,  AO_EMB, '<em class="ten">',        [rfReplaceAll]);
   tmp := StringReplace(tmp,  AO_EME, '</em>',                   [rfReplaceAll]);
   tmp := StringReplace(tmp,  AO_HR,  '<hr />',                  [rfReplaceAll]);
-  tmp := StringReplace(tmp,  AO_PIB, 'a< href="リンクの図">',   [rfReplaceAll]);
+  tmp := StringReplace(tmp,  AO_PIB, '<a href="リンクの図">',   [rfReplaceAll]);
   tmp := StringReplace(tmp,  AO_PIE, '</a>',                    [rfReplaceAll]);
   tmp := StringReplace(tmp,  AO_LIB, '<a href="URLリンク">',    [rfReplaceAll]);
   tmp := StringReplace(tmp,  AO_LIE, '</a>',                    [rfReplaceAll]);
@@ -145,7 +149,7 @@ begin
 end;
 
 // テキストを解析してEpubファイルを構築する
-procedure TForm1.PerseText(Text: TStringList; CoverImage: string);
+function TForm1.PerseText(Text: TStringList; CoverImage: string): Boolean;
 var
   title, auther, tmp, c1, c2, chap1, chap2: string;
   i, n: integer;
@@ -153,13 +157,14 @@ var
   ei: TEpubInfo;
   ep: TEpisInfo;
 begin
+  Result := False;
   title  := Text[0];    // １行目は小説タイトル
   auther := Text[1];    // ２行目は作者名
   tmp    := Text[2];    // ３行目が表紙の図かどうかチェックする
   if Pos(AO_CVB, tmp) > 0 then
-    n := 5                      // 表紙の図を飛ばして４行目から解析する
+    n := 5                      // 表紙の図を飛ばして５行目から解析する
   else
-    n := 4;                     // 表紙の図がないため５行目から解析する
+    n := 4;                     // 表紙の図がないため４行目から解析する
 
   // Epubファイル作成の準備（Publisherは取り敢えず''としてあるが、必要に応じて指定すれば良い）
   ei.BaseDir    := EpubDir.Text;
@@ -182,8 +187,8 @@ begin
 
       if Pos(AO_KKL, tmp) > 0 then // 前書き（前書きはタイトルがないので「前書き」をタイトルにする）
       begin
-        chap1 := '';
-        chap2 := '前書き';
+        chap1 := '前書き';
+        chap2 := '';
         page.Add('<h3>前書き</h3><br />');
       end else if Pos(AO_CPT, tmp) > 0 then  // 大見出しその１
       begin
@@ -191,6 +196,7 @@ begin
         tmp := StringReplace(tmp, AO_CPT, '', [rfReplaceAll]);
         page.Add('<h2>' + tmp + '</h2><br />');
         c1 := tmp;
+        chap1 := tmp;
       end else if Pos(AO_SEC, tmp) > 0 then  // 中見出しその１
       begin
         tmp := StringReplace(tmp, AO_CPI, '', [rfReplaceAll]);
@@ -255,13 +261,6 @@ begin
   end;
 end;
 
-procedure TForm1.ZipExeExit(Sender: TObject);
-begin
-  inherited;
-
-  ZipPath := ZipExe.Text;
-end;
-
 procedure TForm1.Button2Click(Sender: TObject);
 begin
   with OpenDialog1 do
@@ -288,20 +287,37 @@ begin
     EpubDir.Text := dir;
 end;
 
-procedure TForm1.Button4Click(Sender: TObject);
+procedure TForm1.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+var
+  ini: TInifile;
+  inifile: string;
 begin
-  with OpenDialog1 do
-  begin
-    Title      := 'zip.exeの場所を指定する';
-    DefaultExt := 'exe';
-    Filter     := 'zip.exeファイル(zip.exe)|zip.exe|すべてのファイル(*.*)|*.*';
-    if FileExists(ZipExe.Text) then
-      FileName := ZipExe.Text;
-    if Execute then
-    begin
-      ZipExe.Text := FileName;
-      ZipPath := FileName;
-    end;
+  inifile := ChangeFileExt(Application.ExeName, '.ini');
+  ini := TInifile.Create(inifile);
+  try
+    ini.WriteInteger('setting', 'wintop',  Form1.Top);
+    ini.WriteInteger('setting', 'winleft', Form1.Left);
+    Ini.WriteString('setting',  'epubdir', EpubDir.Text);
+    Ini.WriteString('setting',  'lasttxt', TxtFile.Text);
+  finally
+    ini.Free;
+  end;
+end;
+
+procedure TForm1.FormCreate(Sender: TObject);
+var
+  ini: TInifile;
+  inifile: string;
+begin
+  inifile := ChangeFileExt(Application.ExeName, '.ini');
+  ini := TInifile.Create(inifile);
+  try
+    Form1.Top    := ini.ReadInteger('setting', 'wintop',  200);
+    Form1.Left   := ini.ReadInteger('setting', 'winleft', 400);
+    EpubDir.Text := Ini.ReadString('setting',  'epubdir', '');
+    TxtFile.Text := Ini.ReadString('setting',  'lasttxt', '');
+  finally
+    ini.Free;
   end;
 end;
 
@@ -341,7 +357,7 @@ begin
     txtstr.Free;
   end;
   Button1.Enabled := True;
-  Status.Caption := '作成しました.';
+  Status.Caption := '作成しました.'
 end;
 
 end.
