@@ -50,11 +50,10 @@
     尚、著作権はINOUE, masahiro(masahiro.inoue@nifty.com)が留保します。
 
 
-  zip.exeは以下から入手して下さい
-  https://sourceforge.net/projects/gnuwin32/files/zip/3.0/
-
 
   更新の履歴
+    Ver1.3  2022/11/09  表紙画像の処理が中途半端だったのを修正した
+                        挿絵画像をbook.opfへのitemとして追加していなかった不具合を修正した
     Ver1.2  2022/03/24  System.zipを使用することでzip.exeを不要とした
     Ver1.1  2022/02/28  章・話に階層化した目次の生成が不完全だった不具合を修正
     Ver1.0  2021/10/30  最初のバージョン
@@ -135,7 +134,7 @@ const
             + '    </nav>'#13#10;
   NAVCOVER  = '    <nav epub:type="landmarks" hidden="">'#13#10
             + '      <ol>'#13#10
-            + '        <li><a href="Text/titlepage.xhtml" epub:type="cover">Title page</a></li>'#13#10
+            + '        <li><a href="Text/titlepage.xhtml" epub:type="titlepage">Title page</a></li>'#13#10
             + '      </ol>'#13#10
             + '   </nav>'#13#10;
   NAVTAIL   = '  </body>'#13#10
@@ -167,8 +166,11 @@ const
   OPFCHAPR  = '.xhtml" media-type="application/xhtml+xml" />';
 
   OPFMID8   = '        <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav" />'#13#10
-            + '        <item id="css" href="Styles/style.css" media-type="text/css" />'#13#10;
-  OPFIMAGE  = '        <item id="cover-image" href="Images/cover.jpg" media-type="image/jpeg" />'#13#10;
+            + '        <item id="css" href="/Styles/style.css" media-type="text/css" />'#13#10;
+  OPFIMAGE  = '        <item id="cover-image" href="./Images/cover.jpg" properties="cover-image" media-type="image/jpeg" />'#13#10;
+  OPFIMGLS  = '        <item id="img';
+  OPFIMGLM  = '" href="Images/';
+  OPFIMGLE  = '.jpg" media-type="image/jpeg" />'#13#10;
   OPFMID9   = '    </manifest>'#13#10
             + '    <spine page-progression-direction="rtl">'#13#10;
   OPFMID10  = '        <itemref idref="titlepage" />'#13#10;
@@ -209,7 +211,6 @@ const
 
   // EPUBフォルダ
   OEBPS     = '\OEBPS';
-  //OEBPSTEXT = '\OEBPS\Text';
   OEBPSTEXT = '\OEBPS\Text';
   OEBPSCSS  = '\OEBPS\Styles';
   OEBPSIMAGE= '\OEBPS\Images';
@@ -237,6 +238,7 @@ var
   ChapNo: integer;      // チャプター番号
   ChapNested,           // チャプターが章・話と階層化しているか
   IsCoverImg: Boolean;  // 表紙画像があるか
+  ImageNum: integer;    // 挿絵画像数
 
 
 
@@ -278,7 +280,9 @@ begin
   begin
     CopyFile(PWideChar(ImageFile), PWideChar(EpubImage + '\cover.jpg'), False);
     if FileExists(EpubImage + '\cover.jpg') then
+    begin
       IsCoverImg := True;
+    end;
   end;
 end;
 
@@ -332,6 +336,7 @@ begin
   ChapNo        := 2;
   ChapNested    := False;
   IsCoverImg    := False;
+  ImageNum      := 0;
 
   EpubTitle     := EpubInfo.Title;
   EpubAuther    := EpubInfo.Auther;
@@ -456,6 +461,7 @@ begin
     CopyFile(PWideChar(ImageFile), PWideChar(EpubImage + '\' + ExtractFileName(ImageFile)), False);
     // Epub(zip)に保存するファイルリストを準備する
     EpubFiles.Add('"' + EpubImage + '\' + ExtractFileName(ImageFile) + '","OEBPS/Images/' + ExtractFileName(ImageFile) + '"');
+    Inc(ImageNum);  // 挿絵画像数をカウント
   end;
 end;
 
@@ -466,7 +472,7 @@ procedure FinalizeEpub;
 var
   opf, nav, ct: TStringList;
   i: integer;
-  cn: string;
+  cn, imglist: string;
   cf: boolean;
   zip: TZipFile;
   zipfile: TStringList;
@@ -550,6 +556,13 @@ begin
     // 表紙絵があればtitlepage.xhtmlへのリンク情報を追加する
     if IsCoverImg then
       opf.Text := opf.Text + OPFIMAGE;
+    // 挿絵画像IDを追加する
+    for i := 0 to ImageNum - 1 do
+    begin
+      imglist := OPFIMGLS + IntToStr(i + 1) + OPFIMGLM + IntToStr(i + 1) + OPFIMGLE;
+      opf.Add(imglist);
+    end;
+
     opf.Text := opf.Text + OPFMID9;
     // 表紙絵があればtitpepage IDを追加する
     if IsCoverImg then
@@ -581,6 +594,9 @@ begin
     // Epub(zip)に保存するファイルリストを準備する
     EpubFiles.Add('"' + EpubEpub + '\book.opf",OEBPS/book.opf');
     EpubFiles.Add('"' + EpubEpub + '\nav.xhtml",OEBPS/nav.xhtml');
+    // 表紙画像cover.jpg
+    if FileExists(EpubImage + '\cover.jpg') then
+      EpubFiles.Add('"' + EpubImage + '\cover.jpg' + '","OEBPS/Images/cover.jpg"');
 
     // TZipFileを使用してEPUBファイルを構築する
     zip := TZipFile.Create;
