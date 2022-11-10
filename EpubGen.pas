@@ -52,8 +52,13 @@
 
 
   更新の履歴
+    Ver1.4  2022/11/11  本文中に&nbsp;(半角スペース)があってもエラーとならないよう修正した
+                        (ヘッダーを<!DOCTYPE html [ <!ENTITY nbsp "&#160;">]>に修正)
+                        EpubAddImageで追加された画像ファイルをopfファイルのitemに追加する
+                        ようにした
     Ver1.3  2022/11/09  表紙画像の処理が中途半端だったのを修正した
                         挿絵画像をbook.opfへのitemとして追加していなかった不具合を修正した
+                        Epubを作成するフォルダ構成を変更した
     Ver1.2  2022/03/24  System.zipを使用することでzip.exeを不要とした
     Ver1.1  2022/02/28  章・話に階層化した目次の生成が不完全だった不具合を修正
     Ver1.0  2021/10/30  最初のバージョン
@@ -183,7 +188,7 @@ const
 
   // 小説各話本文xhtmlファイル用テンプレート
   BODYHEAD  = '<?xml version=''1.0'' encoding=''UTF-8''?>'#13#10
-            + '<!DOCTYPE html>'#13#10
+            + '<!DOCTYPE html [ <!ENTITY nbsp "&#160;">]>'#13#10
             + '<html xmlns="http://www.w3.org/1999/xhtml">'#13#10
             + '  <head>'#13#10
             + '    <meta charset="utf-8" />'#13#10
@@ -220,7 +225,8 @@ const
 {$I titlepage.inc}      // titlepage.xhtmlの定義
 
 var
-  EpubBase,             // Epubを作成するためのベースディレクトリ名
+  BaseDir,              // Epubを作成するためのベースディレクトリ名
+  EpubBase,             // Epubフォルダ名（ベースディレクトリ\EPUB）
   EpubTitle,            // 作品のタイトル名
   EpubAuther,           // 作者名
   EpubPublisher,        // 発行者
@@ -321,7 +327,7 @@ procedure InitializeEpub(EpubInfo: TEpubInfo);
 var
   sl: TStringList;
   fs: TFileStream;
-  epub, d, t: string;
+  d, t: string;
   dt: TDateTime;
   fos:TSHFileOpStruct;
   wnd: THandle;
@@ -338,11 +344,11 @@ begin
   IsCoverImg    := False;
   ImageNum      := 0;
 
+  BaseDir       := EpubInfo.BaseDir;
   EpubTitle     := EpubInfo.Title;
   EpubAuther    := EpubInfo.Auther;
   EpubPublisher := EpubInfo.Publisher;
-  epub          := CreateEpubName(EpubInfo.Title);          // タイトル名からepub名を作成する
-  EpubBase      := EpubInfo.BaseDir + '\' + epub;           // epubを構成するためのフォルダ名
+  EpubBase      := EpubInfo.BaseDir + '\EPUB';// + epub;           // epubを構成するためのフォルダ名
   // epub構成フォルダを作成する
   if not DirectoryExists(EpubBase) then
     ForceDirectories(EpubBase)
@@ -363,7 +369,7 @@ begin
   EpubCss       := EpubBase + OEBPSCSS;
   EpubImage     := EpubBase + OEBPSIMAGE;
   EpubMetaInf   := EpubBase + METAINF;
-  EpubName      := EpubBase + '\' + epub + '.epub'; // 最終的なepubファイル名
+  EpubName      := BaseDir + '\' + CreateEpubName(EpubTitle) + '.epub'; // 最終的なepubファイル名
   // epub構成用のサブフォルダを作成する
   if not FileExists(EpubEpub)    then ForceDirectories(EpubEpub);
   if not FileExists(EpubText)    then ForceDirectories(EpubText);
