@@ -19,6 +19,8 @@
   尚、ソースコードの流用・改変含めて自由です。
 
 修正履歴
+  2022/11/25 章・話タイトルで構成されている場合目次のネストが崩れる場合があった不具合を修正した
+             「前書き」を「あらすじ」に変更した
   2922/03/24 EpubGenでTZipFileを使用するように変更したため、zip.exeの場所指定を削除した
              最後の起動状況を保存して次回起動時に復元するようにした（text2Epub.exeと同じ場所に
              text2Epub.iniファイルを作成するので書込み可能なフォルダにtext2Epub.exeを置く必要が
@@ -185,11 +187,11 @@ begin
     begin
       tmp := ReplaceSpecialChar(Text[i]);
 
-      if Pos(AO_KKL, tmp) > 0 then // 前書き（前書きはタイトルがないので「前書き」をタイトルにする）
+      if Pos(AO_KKL, tmp) > 0 then // あらすじ（あらすじはタイトルがないので「あらすじ」をタイトルにする）
       begin
-        chap1 := '前書き';
-        chap2 := '';
-        page.Add('<h3>前書き</h3><br />');
+        chap1 := '';
+        chap2 := 'あらすじ';
+        page.Add('<h3>あらすじ</h3><br />');
       end else if Pos(AO_CPT, tmp) > 0 then  // 大見出しその１
       begin
         tmp := StringReplace(tmp, AO_CPI, '', [rfReplaceAll]);
@@ -203,11 +205,13 @@ begin
         tmp := StringReplace(tmp, AO_SEC, '', [rfReplaceAll]);
         page.Add('<h3>' + tmp + '</h3><br />');
         c2 := tmp;
+        // 章タイトル・話タイトルがある
         if c1 <> '' then
         begin
           chap1 := c1;
           chap2 := c2;
           c1 := '';
+        // 話タイトルのみ
         end else begin
           chap1 := '';
           chap2 := c2;
