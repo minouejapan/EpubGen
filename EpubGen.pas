@@ -25,33 +25,21 @@
 
   ・calibre(https://calibre-ebook.com/)にて正常に表示できることを確認しています
 
-  ・超縦書ビュワー(https://www.bpsinc.jp/epub.html#chotategaki)で正常に表示できる
-    ことを確認しています
-    Windows上のビュワーとしてはこのビュワーがおすすめです
-
   ・Reasily-EPUB Reader(https://play.google.com/store/apps/details?id=com.gmail.jxlab.app.reasily&hl=ja&gl=US)
     にてAndroidタブレット上で正常に表示できることを確認しています
 
-  ・Kinoppy for Windows(https://k-kinoppy.jp/for-windowsdt.html)ではアプリの本棚
-    に書籍として登録する際に、表紙画像がないものは正常に登録出来ますが表紙画像が
-    あるものは「内部エラーが発生しました」となり登録出来ません
-    しかしながら、エクスプローラ上でEPUBファイルをKinnopy fo Windowsで直接開いた
-    場合には、表紙画像があってもなくても正常に表示されます
-    なぜそうなるのか原因は不明ですが、出力されたEPUBフォルダ・ファイルをWSL2上の
-    Ubuntuターミナル上でzip ver3.0を用いてEPUBファイル化したものは正常に書籍登録
-    が出来ます
-    Linux用とWindows用のzip出力サイズが違うことはわかっていますが、なぜ違うのかと
-    なぜWindows上で作成したEPUBを書籍登録出来ないのかはわかりません
-
   ライセンス
-    フリーソフトです。個人、業務に関わらず、どなたでも自由に使用することが出来ます
-    が、使用に当たって発生したいかなる不具合に対してもいっさいの保証はしません。
-    使用者個人の責任においてのみ自由に使用することが許可されます。
-    尚、著作権はINOUE, masahiro(masahiro.inoue@nifty.com)が留保します。
+    github上でApache2.0ライセンスで公開しています。
+    A[ache2.0はほぼなんでもありのライセンスですので個人、業務に関わらず、どなたでも
+    自由に使用することが出来ます。
+    尚、使用に当たって発生したいかなる不具合に対してもいっさいの保証はしませんので、
+    使用者個人の責任でご使用下さい。
 
 
 
   更新の履歴
+    Ver1.5  2022/11/25  一部の変数をグローバル化した
+                        EPUBフォルダ内の既存ファイル削除方法を変更した
     Ver1.4  2022/11/11  本文中に&nbsp;(半角スペース)があってもエラーとならないよう修正した
                         (ヘッダーを<!DOCTYPE html [ <!ENTITY nbsp "&#160;">]>に修正)
                         EpubAddImageで追加された画像ファイルをopfファイルのitemに追加する
@@ -72,7 +60,7 @@ uses
 	Vcl.FileCtrl,
 {$WARN UNIT_PLATFORM ON}
   Winapi.Windows, System.SysUtils, System.Classes, Vcl.StdCtrls, Winapi.Shellapi, System.DateUtils,
-  System.Zip;
+  System.Zip, System.IOUtils;
 
 type
   // InitializeEpub用
@@ -90,10 +78,16 @@ type
     Episode: string;    // 本文
   end;
 
+// 公開手続き
 procedure InitializeEpub(EpubInfo: TEpubInfo);    // Epub作成の準備
 procedure EPubAddPage(Episode: TEpisInfo);        // 一話分の情報を追加する
 procedure EpubAddImage(ImageFile: string);        // 挿絵画像ファイルをEpubフォルダに追加する
 procedure FinalizeEpub;                           // Epubを完成させる
+
+// 公開変数（外部からアクセスする可能性があるものに限定）
+var
+  EpubBase,           // Epubフォルダ名（ベースディレクトリ\EPUB）
+  EpubName: string;   // Epubファイル名
 
 
 implementation
@@ -226,7 +220,6 @@ const
 
 var
   BaseDir,              // Epubを作成するためのベースディレクトリ名
-  EpubBase,             // Epubフォルダ名（ベースディレクトリ\EPUB）
   EpubTitle,            // 作品のタイトル名
   EpubAuther,           // 作者名
   EpubPublisher,        // 発行者
@@ -234,7 +227,6 @@ var
   EpubText,             // OEBPS\Textフォルダ
   EpubCss,              // OEBPS\Stylesフォルダ
   EpubImage,            // OEBPS\Imagesフォルダ
-  EpubName,             // Epubファイル名
   EpubMetaInf,          // META-INFフォルダ
   Uuid,                 // UUID(GUID)
   CreateTime: string;   // 作成日時
@@ -329,8 +321,6 @@ var
   fs: TFileStream;
   d, t: string;
   dt: TDateTime;
-  fos:TSHFileOpStruct;
-  wnd: THandle;
 begin
   if EpubInfo.Title = '' then
     Exit;
@@ -355,14 +345,11 @@ begin
   // 既にフォルダが存在する場合はそのフォルダ内全てを削除する
   // （以前のファイルが残っているとEPUB作成時に悪影響があるため）
   else begin
-    wnd := GetStdHandle(STD_OUTPUT_HANDLE);
-    fos.Wnd := wnd;
-    fos.wFunc := FO_DELETE;
-    fos.pFrom := PChar(EPubBase + '\*.*');
-    fos.pTo := nil;
-    fos.fFlags := FOF_SILENT or FOF_NOCONFIRMATION or FOF_NOERRORUI;
-    fos.fAnyOperationsAborted := False;
-    SHFileOperation(fos);
+    try
+      TDirectory.Delete(EpubBase + '\*.*', True);
+    except
+      ;
+    end;
   end;
   EpubEpub      := EpubBase + OEBPS;
   EpubText      := EpubBase + OEBPSTEXT;
@@ -636,6 +623,8 @@ initialization
   Chapter   := TStringList.Create;  // 各話情報構築用に生成
   ChapLbl   := TStringList.Create;  // 各話情報構築用に生成
   EpubFiles := TStringList.Create;  // Epub保存ファイルリスト用に生成
+  EpubBase  := '';                  // Epubフォルダ名（ベースディレクトリ\EPUB）
+  EpubName  := '';                  // Epubファイル名
 
 // TStringListの破棄
 finalization
