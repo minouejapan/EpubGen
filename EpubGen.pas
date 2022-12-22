@@ -38,6 +38,7 @@
 
 
   更新の履歴
+    Ver1.6  2022/12/23  BODYHEADテンプレートのDOCTYPE内容を変更した
     Ver1.5  2022/11/25  一部の変数をグローバル化した
                         EPUBフォルダ内の既存ファイル削除方法を変更した
     Ver1.4  2022/11/11  本文中に&nbsp;(半角スペース)があってもエラーとならないよう修正した
@@ -182,7 +183,8 @@ const
 
   // 小説各話本文xhtmlファイル用テンプレート
   BODYHEAD  = '<?xml version=''1.0'' encoding=''UTF-8''?>'#13#10
-            + '<!DOCTYPE html [ <!ENTITY nbsp "&#160;">]>'#13#10
+            // + '<!DOCTYPE html [ <!ENTITY nbsp "&#160;">]>'#13#10
+	    + '<!DOCTYPE html [ <!ENTITY nbsp "&#160;">]>'#13#10
             + '<html xmlns="http://www.w3.org/1999/xhtml">'#13#10
             + '  <head>'#13#10
             + '    <meta charset="utf-8" />'#13#10
