@@ -19,6 +19,7 @@
   尚、ソースコードの流用・改変含めて自由です。
 
 修正履歴
+  2022/12/23 半角スペースのエスケープ文字を&nbsp;ではなく&#160;として追加した
   2022/11/25 章・話タイトルで構成されている場合目次のネストが崩れる場合があった不具合を修正した
              「前書き」を「あらすじ」に変更した
   2922/03/24 EpubGenでTZipFileを使用するように変更したため、zip.exeの場所指定を削除した
@@ -115,6 +116,7 @@ begin
   tmp := StringReplace(tmp,  '"', '&quot;',   [rfReplaceAll]);
   tmp := StringReplace(tmp,  '\', '&yen;',    [rfReplaceAll]);
   tmp := StringReplace(tmp,  '|', '&#166;',   [rfReplaceAll]);
+  tmp := StringReplace(tmp,  ' ', '&#160;',   [rfReplaceAll]);
   //エスケープするとエラーになるようなので無効化しておく
   //tmp := StringReplace(tmp,  '©', '&copy;',   [rfReplaceAll]);
   //tmp := StringReplace(tmp,  '®', '&reg;',    [rfReplaceAll]);
