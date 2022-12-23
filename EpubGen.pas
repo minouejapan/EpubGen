@@ -184,6 +184,7 @@ const
   // 小説各話本文xhtmlファイル用テンプレート
   BODYHEAD  = '<?xml version=''1.0'' encoding=''UTF-8''?>'#13#10
             // + '<!DOCTYPE html [ <!ENTITY nbsp "&#160;">]>'#13#10
+	    // EPUB各話HTML内の&nbsp;を&#160;表記に変更する必要がある.
 	    + '<!DOCTYPE html [ <!ENTITY nbsp "&#160;">]>'#13#10
             + '<html xmlns="http://www.w3.org/1999/xhtml">'#13#10
             + '  <head>'#13#10
