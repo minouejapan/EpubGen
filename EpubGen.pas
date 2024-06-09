@@ -34,6 +34,7 @@
 
 
   更新の履歴
+    Ver2.0  2024/06/09  book.opfの<item id="css"で指定するstyle.cssのアドレスが間違って
     Ver1.9  2024/06/02  ベースディレクトリ名をトリムする際に内部の半角スペースも削除して
                         いた不具合を修正した
     Ver1.8  2024/01/04  作成するEPUBファイル名を外部から強制指定するためにグローバル変数
@@ -178,7 +179,7 @@ const
   OPFCHAPR  = '.xhtml" media-type="application/xhtml+xml" />';
 
   OPFMID8   = '        <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav" />'#13#10
-            + '        <item id="css" href="/Styles/style.css" media-type="text/css" />'#13#10;
+            + '        <item id="css" href="./Styles/style.css" media-type="text/css" />'#13#10; // fixed miss-address/Styles -> ./Styles 2024/6/9
   OPFIMAGE  = '        <item id="cover-image" href="./Images/cover.jpg" properties="cover-image" media-type="image/jpeg" />'#13#10;
   OPFIMGLS  = '        <item id="img';
   OPFIMGLM  = '" href="Images/';
