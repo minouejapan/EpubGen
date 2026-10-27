@@ -25,16 +25,13 @@
 
 
   ライセンス
-    github上でApache2.0ライセンスで公開しています。
-    A[ache2.0はほぼなんでもありのライセンスですので個人、業務に関わらず、どなたでも
-    自由に使用することが出来ます。
-    尚、使用に当たって発生したいかなる不具合に対してもいっさいの保証はしませんので、
-    使用者個人の責任でご使用下さい。
-
+    MIT
 
 
   更新の履歴
+    Ver2.1  2026/10/26  Lazarusでもビルド出来るようにした
     Ver2.0  2024/06/09  book.opfの<item id="css"で指定するstyle.cssのアドレスが間違って
+                        いたのを修正した
     Ver1.9  2024/06/02  ベースディレクトリ名をトリムする際に内部の半角スペースも削除して
                         いた不具合を修正した
     Ver1.8  2024/01/04  作成するEPUBファイル名を外部から強制指定するためにグローバル変数
@@ -63,14 +60,23 @@
 *)
 unit EpubGen;
 
+{$IFDEF FPC}
+  {$MODE DELPHI}
+  {$CODEPAGE UTF8}
+{$ENDIF}
+
 interface
 
 uses
+{$IFDEF FPC}
+  Windows, SysUtils, Classes, StdCtrls, DateUtils, FileUtil, LazSysUtils, Zipper, ZStream;
+{$ELSE}
 {$WARN UNIT_PLATFORM OFF}
 	Vcl.FileCtrl,
 {$WARN UNIT_PLATFORM ON}
   Winapi.Windows, System.SysUtils, System.Classes, Vcl.StdCtrls, System.DateUtils,
   System.IOUtils, System.Zip;
+{$ENDIF}
 
 type
   // InitializeEpub用
@@ -179,7 +185,7 @@ const
   OPFCHAPR  = '.xhtml" media-type="application/xhtml+xml" />';
 
   OPFMID8   = '        <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav" />'#13#10
-            + '        <item id="css" href="./Styles/style.css" media-type="text/css" />'#13#10; // fixed miss-address/Styles -> ./Styles 2024/6/9
+            + '        <item id="css" href="./Styles/style.css" media-type="text/css" />'#13#10;  // fixed miss-address/Styles -> ./Styles 2024/6/9
   OPFIMAGE  = '        <item id="cover-image" href="./Images/cover.jpg" properties="cover-image" media-type="image/jpeg" />'#13#10;
   OPFIMGLS  = '        <item id="img';
   OPFIMGLM  = '" href="Images/';
@@ -294,7 +300,11 @@ procedure CreateCoverImage(ImageFile: string);
 begin
   if FileExists(ImageFile) then
   begin
+  {$IFDEF FPC}
+    CopyFile(PChar(ImageFile), PChar(EpubImage + '\cover.jpg'), False);
+  {$ELSE}
     CopyFile(PWideChar(ImageFile), PWideChar(EpubImage + '\cover.jpg'), False);
+  {$ENDIF}
     if FileExists(EpubImage + '\cover.jpg') then
     begin
       IsCoverImg := True;
@@ -339,7 +349,6 @@ var
   fs: TFileStream;
   d, t: string;
   dt: TDateTime;
-  p: integer;
 begin
   if EpubInfo.Title = '' then
     Exit;
@@ -355,15 +364,7 @@ begin
 
   BaseDir       := EpubInfo.BaseDir;
   EpubRoot      := BaseDir;
-  { ver1.9 2024/6/2
-  p := Pos(' ', BaseDir);
-  while p > 0 do
-  begin
-    Delete(BaseDir, p, 1);
-    p := Pos(' ', BaseDir);
-  end;
-  }
-  BaseDir := Trim(BaseDir); // ver1.9
+  BaseDir       := Trim(BaseDir);
   EpubTitle     := EpubInfo.Title;
   EpubAuther    := EpubInfo.Auther;
   EpubPublisher := EpubInfo.Publisher;
@@ -381,20 +382,24 @@ begin
   else begin
     try
       if DirectoryExists(EpubBase) then
-        TDirectory.Delete(EpubBase + '\*.*', True);
+      {$IFDEF FPC}
+        DeleteDirectory(EpubBase, False);
+      {$ELSE}
+        TDirectory.Delete(EpubBase + '\*.*');
+      {$ENDIF}
     except
       ;
     end;
   end;
-  EpubEpub      := EpubBase + OEBPS;
-  EpubText      := EpubBase + OEBPSTEXT;
-  EpubCss       := EpubBase + OEBPSCSS;
-  EpubImage     := EpubBase + OEBPSIMAGE;
-  EpubMetaInf   := EpubBase + METAINF;
+  EpubEpub   := EpubBase + OEBPS;
+  EpubText   := EpubBase + OEBPSTEXT;
+  EpubCss    := EpubBase + OEBPSCSS;
+  EpubImage  := EpubBase + OEBPSIMAGE;
+  EpubMetaInf:= EpubBase + METAINF;
   if EpubFile <> '' then
     EpubName := EpubFile
   else
-    EpubName      := BaseDir + '\' + CreateEpubName(EpubTitle) + '.epub'; // 最終的なepubファイル名
+    EpubName := BaseDir + '\' + CreateEpubName(EpubTitle) + '.epub'; // 最終的なepubファイル名
   // epub構成用のサブフォルダを作成する
   if not DirectoryExists(EpubEpub)    then ForceDirectories(EpubEpub);
   if not DirectoryExists(EpubText)    then ForceDirectories(EpubText);
@@ -425,7 +430,11 @@ begin
     // StyleSheetに設定されたファイルがあればstyle.cssとして使用し、ファイルが存在しない
     // もしくは指定されていない場合はEpubGen規定のstyle.cssを使用する
     if (EpubInfo.StyleSheet <> '') and FileExists(EpubInfo.StyleSheet) then
+    {$IFDEF FPC}
+      CopyFile(PChar(EpubInfo.StyleSheet), PChar(EpubCss + '\style.css'), False)
+    {$ELSE}
       CopyFile(PWideChar(EpubInfo.StyleSheet), PWideChar(EpubCss + '\style.css'), False)
+    {$ENDIF}
     else begin
       sl.Text := STYLECSS;
       sl.WriteBOM := False;
@@ -453,7 +462,11 @@ begin
   Delete(Uuid, 1, 1);
   Delete(Uuid, Length(Uuid), 1);      // 最初と最後の{}を削除する
   // 作成時間をUTC時間で取得する
+{$IFDEF FPC}
+  dt := NowUTC;
+{$ELSE}
   dt := TTimeZone.Local.ToUniversalTime(Now);
+{$ENDIF}
   DateTimeToString(d, 'yyyy-mm-dd', dt);
   DateTimeToString(t, 'hh:nn:ss', dt);
   CreateTime := d + 'T' + t + 'Z';    // UTC時間の文字列を作成
@@ -495,7 +508,11 @@ procedure EpubAddImage(ImageFile: string);
 begin
   if DirectoryExists(EpubImage) then
   begin
+  {$IFDEF FPC}
+    CopyFile(PChar(ImageFile), PChar(EpubImage + '\' + ExtractFileName(ImageFile)), False);
+  {$ELSE}
     CopyFile(PWideChar(ImageFile), PWideChar(EpubImage + '\' + ExtractFileName(ImageFile)), False);
+  {$ENDIF}
     // Epub(zip)に保存するファイルリストを準備する
     EpubFiles.Add('"' + EpubImage + '\' + ExtractFileName(ImageFile) + '","OEBPS/Images/' + ExtractFileName(ImageFile) + '"');
     Inc(ImageNum);  // 挿絵画像数をカウント
@@ -511,7 +528,12 @@ var
   i: integer;
   cn, imglist: string;
   cf: boolean;
+{$IFDEF FPC}
+  zip: TZipper;
+  entry: TZipFileEntry;
+{$ELSE}
   zip: TZipFile;
+{$ENDIF}
   zipfile: TStringList;
 begin
   if ChapNo = 0 then    // 初期化されていない
@@ -636,7 +658,33 @@ begin
     // 表紙画像cover.jpg
     if FileExists(EpubImage + '\cover.jpg') then
       EpubFiles.Add('"' + EpubImage + '\cover.jpg' + '","OEBPS/Images/cover.jpg"');
-
+{$IFDEF FPC}
+    // TZipperを使用してEPUBファイルを構築する
+    zip := TZipper.Create;
+    zipfile := TStringList.Create;
+    try
+      zip.FileName := EpubName;
+      // mimetypeを無圧縮で格納する
+      zipfile.CommaText := EpubFiles[0];
+      // mimetypeを最初に無圧縮で格納する
+      entry := zip.Entries.AddFileEntry(zipfile[0], zipfile[1]);
+      entry.CompressionLevel := clNone;
+      // その他のファイルを圧縮して格納する
+      for i := 1 to EPubFiles.Count - 1 do
+      begin
+        zipfile.CommaText := EpubFiles[i];
+        if FileExists(zipfile[0]) then
+        begin
+          entry := zip.Entries.AddFileEntry(zipfile[0], zipfile[1]);
+          entry.CompressionLevel := clDefault;
+				end;
+			end;
+      zip.ZipAllFiles;
+    finally
+      zipfile.Free;
+      zip.Free;
+    end;
+{$ELSE}
     // TZipFileを使用してEPUBファイルを構築する
     zip := TZipFile.Create;
     zipfile := TStringList.Create;
@@ -658,6 +706,7 @@ begin
       zipfile.Free;
       zip.Free;
     end;
+{$ENDIF}
   finally
     opf.Free;
     nav.Free;
