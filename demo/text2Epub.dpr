@@ -1,7 +1,15 @@
 program text2Epub;
 
+{$IFDEF FPC}
+  {$MODE Delphi}
+{$ENDIF}
+
 uses
+{$IFnDEF FPC}
   Vcl.Forms,
+{$ELSE}
+  Forms, Interfaces,
+{$ENDIF}
   Text2EpubUnit in 'Text2EpubUnit.pas' {Form1},
   EpubGen in 'EpubGen.pas';
 

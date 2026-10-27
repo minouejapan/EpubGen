@@ -9,16 +9,14 @@
 
   あくまでもサンプルプロジェクトであるため、拙作ダウンローダーが吐き出す青空
   文庫（風）タグの一部にしか対応していませんし最低限の処理しか行っていません
+  また、章タイトル・話タイトルの処理が不完全なため作品によってはEPUBが不完全
+  になる場合があります
   またEpubGen側には表紙絵や挿絵処理がありますが、このサンプルでは挿絵をダウン
   ロードしてEPub内に格納するような処理は行っていません
 
 
-ライセンス
-  フリーソフトです。個人、業務に関わらず、どなたでも自由に使用することが出来ます
-  が、使用に当たって発生したいかなる不具合に対してもいっさいの保証はしません。
-  尚、ソースコードの流用・改変含めて自由です。
-
 修正履歴
+  2026/10/26 Lazarusでのビルドに対応した
   2022/12/23 半角スペースのエスケープ文字を&nbsp;ではなく&#160;として追加した
   2022/11/25 章・話タイトルで構成されている場合目次のネストが崩れる場合があった不具合を修正した
              「前書き」を「あらすじ」に変更した
@@ -32,14 +30,25 @@
 *)
 unit Text2EpubUnit;
 
+{$IFDEF FPC}
+  {$MODE DELPHI}
+  {$CODEPAGE UTF8}
+{$ENDIF}
+
 interface
 
 uses
+{$IFDEF FPC}
+  Windows, Messages, SysUtils, Variants, Classes, Controls, Forms,
+  Dialogs, StdCtrls, IniFiles, LazUTF8;
+{$ELSE}
 {$WARN UNIT_PLATFORM OFF}
 	Vcl.FileCtrl,
 {$WARN UNIT_PLATFORM ON}
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, System.IniFiles;
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, System.IniFiles,
+  lazutf8wrap;
+{$ENDIF}
 
 type
   TForm1 = class(TForm)
@@ -70,7 +79,11 @@ var
 
 implementation
 
-{$R *.dfm}
+{$IFDEF FPC}
+  {$R *.lfm}
+{$ELSE}
+  {$R *.dfm}
+{$ENDIF}
 
 uses
   EpubGen;  // EpubGenユニットを使用する
@@ -110,22 +123,22 @@ begin
   Result := '';
 
   // 特殊文字のエスケープ
-  tmp := StringReplace(Text, '&', '&amp;',    [rfReplaceAll]);
-  tmp := StringReplace(tmp,  '<', '&lt;',     [rfReplaceAll]);
-  tmp := StringReplace(tmp,  '>', '&gt;',     [rfReplaceAll]);
-  tmp := StringReplace(tmp,  '"', '&quot;',   [rfReplaceAll]);
-  tmp := StringReplace(tmp,  '\', '&yen;',    [rfReplaceAll]);
-  tmp := StringReplace(tmp,  '|', '&#166;',   [rfReplaceAll]);
-  tmp := StringReplace(tmp,  ' ', '&#160;',   [rfReplaceAll]);
+  tmp := UTF8StringReplace(Text, '&', '&amp;',    [rfReplaceAll]);
+  tmp := UTF8StringReplace(tmp,  '<', '&lt;',     [rfReplaceAll]);
+  tmp := UTF8StringReplace(tmp,  '>', '&gt;',     [rfReplaceAll]);
+  tmp := UTF8StringReplace(tmp,  '"', '&quot;',   [rfReplaceAll]);
+  tmp := UTF8StringReplace(tmp,  '\', '&yen;',    [rfReplaceAll]);
+  tmp := UTF8StringReplace(tmp,  '|', '&#166;',   [rfReplaceAll]);
+  tmp := UTF8StringReplace(tmp,  ' ', '&#160;',   [rfReplaceAll]);
   //エスケープするとエラーになるようなので無効化しておく
-  //tmp := StringReplace(tmp,  '©', '&copy;',   [rfReplaceAll]);
-  //tmp := StringReplace(tmp,  '®', '&reg;',    [rfReplaceAll]);
-  //tmp := StringReplace(tmp,  '°', '&deg;',    [rfReplaceAll]);
-  //tmp := StringReplace(tmp,  '±', '&plusmn;', [rfReplaceAll]);
-  //tmp := StringReplace(tmp,  '×', '&times;',  [rfReplaceAll]);
-  //tmp := StringReplace(tmp,  '÷', '&dvide;',  [rfReplaceAll]);
-  //tmp := StringReplace(tmp,  '´', '&acute;',  [rfReplaceAll]);
-  //tmp := StringReplace(tmp,  'µ', '&micro;',  [rfReplaceAll]);
+  //tmp := UTF8StringReplace(tmp,  '©', '&copy;',   [rfReplaceAll]);
+  //tmp := UTF8StringReplace(tmp,  '®', '&reg;',    [rfReplaceAll]);
+  //tmp := UTF8StringReplace(tmp,  '°', '&deg;',    [rfReplaceAll]);
+  //tmp := UTF8StringReplace(tmp,  '±', '&plusmn;', [rfReplaceAll]);
+  //tmp := UTF8StringReplace(tmp,  '×', '&times;',  [rfReplaceAll]);
+  //tmp := UTF8StringReplace(tmp,  '÷', '&dvide;',  [rfReplaceAll]);
+  //tmp := UTF8StringReplace(tmp,  '´', '&acute;',  [rfReplaceAll]);
+  //tmp := UTF8StringReplace(tmp,  'µ', '&micro;',  [rfReplaceAll]);
 
   Result := tmp;
 end;
@@ -138,16 +151,16 @@ begin
   Result := '';
 
   // 一括置換出来るタグ
-  tmp := StringReplace(Text, AO_RBI, '<ruby><rb>',              [rfReplaceAll]);
-  tmp := StringReplace(tmp,  AO_RBL, '</rb><rp>（</rp><rt>',    [rfReplaceAll]);
-  tmp := StringReplace(tmp,  AO_RBR, '</rt><rp>）</rp></ruby>', [rfReplaceAll]);
-  tmp := StringReplace(tmp,  AO_EMB, '<em class="ten">',        [rfReplaceAll]);
-  tmp := StringReplace(tmp,  AO_EME, '</em>',                   [rfReplaceAll]);
-  tmp := StringReplace(tmp,  AO_HR,  '<hr />',                  [rfReplaceAll]);
-  tmp := StringReplace(tmp,  AO_PIB, '<a href="リンクの図">',   [rfReplaceAll]);
-  tmp := StringReplace(tmp,  AO_PIE, '</a>',                    [rfReplaceAll]);
-  tmp := StringReplace(tmp,  AO_LIB, '<a href="URLリンク">',    [rfReplaceAll]);
-  tmp := StringReplace(tmp,  AO_LIE, '</a>',                    [rfReplaceAll]);
+  tmp := UTF8StringReplace(Text, AO_RBI, '<ruby><rb>',              [rfReplaceAll]);
+  tmp := UTF8StringReplace(tmp,  AO_RBL, '</rb><rp>（</rp><rt>',    [rfReplaceAll]);
+  tmp := UTF8StringReplace(tmp,  AO_RBR, '</rt><rp>）</rp></ruby>', [rfReplaceAll]);
+  tmp := UTF8StringReplace(tmp,  AO_EMB, '<em class="ten">',        [rfReplaceAll]);
+  tmp := UTF8StringReplace(tmp,  AO_EME, '</em>',                   [rfReplaceAll]);
+  tmp := UTF8StringReplace(tmp,  AO_HR,  '<hr />',                  [rfReplaceAll]);
+  tmp := UTF8StringReplace(tmp,  AO_PIB, '<a href="リンクの図">',   [rfReplaceAll]);
+  tmp := UTF8StringReplace(tmp,  AO_PIE, '</a>',                    [rfReplaceAll]);
+  tmp := UTF8StringReplace(tmp,  AO_LIB, '<a href="URLリンク">',    [rfReplaceAll]);
+  tmp := UTF8StringReplace(tmp,  AO_LIE, '</a>',                    [rfReplaceAll]);
 
   Result := tmp;
 end;
@@ -165,7 +178,7 @@ begin
   title  := Text[0];    // １行目は小説タイトル
   auther := Text[1];    // ２行目は作者名
   tmp    := Text[2];    // ３行目が表紙の図かどうかチェックする
-  if Pos(AO_CVB, tmp) > 0 then
+  if UTF8Pos(AO_CVB, tmp) > 0 then
     n := 5                      // 表紙の図を飛ばして５行目から解析する
   else
     n := 4;                     // 表紙の図がないため４行目から解析する
@@ -176,6 +189,7 @@ begin
   ei.Auther     := auther;
   ei.Publisher  := '';
   ei.CoverImage := CoverImage;
+  ei.StyleSheet := '';
   InitializeEpub(ei);
 
   page    := TStringList.Create;;
@@ -189,22 +203,22 @@ begin
     begin
       tmp := ReplaceSpecialChar(Text[i]);
 
-      if Pos(AO_KKL, tmp) > 0 then // あらすじ（あらすじはタイトルがないので「あらすじ」をタイトルにする）
+      if UTF8Pos(AO_KKL, tmp) > 0 then // あらすじ（あらすじはタイトルがないので「あらすじ」をタイトルにする）
       begin
         chap1 := '';
         chap2 := 'あらすじ';
         page.Add('<h3>あらすじ</h3><br />');
-      end else if Pos(AO_CPT, tmp) > 0 then  // 大見出しその１
+      end else if UTF8Pos(AO_CPT, tmp) > 0 then  // 大見出しその１
       begin
-        tmp := StringReplace(tmp, AO_CPI, '', [rfReplaceAll]);
-        tmp := StringReplace(tmp, AO_CPT, '', [rfReplaceAll]);
+        tmp := UTF8StringReplace(tmp, AO_CPI, '', [rfReplaceAll]);
+        tmp := UTF8StringReplace(tmp, AO_CPT, '', [rfReplaceAll]);
         page.Add('<h2>' + tmp + '</h2><br />');
         c1 := tmp;
         chap1 := tmp;
-      end else if Pos(AO_SEC, tmp) > 0 then  // 中見出しその１
+      end else if UTF8Pos(AO_SEC, tmp) > 0 then  // 中見出しその１
       begin
-        tmp := StringReplace(tmp, AO_CPI, '', [rfReplaceAll]);
-        tmp := StringReplace(tmp, AO_SEC, '', [rfReplaceAll]);
+        tmp := UTF8StringReplace(tmp, AO_CPI, '', [rfReplaceAll]);
+        tmp := UTF8StringReplace(tmp, AO_SEC, '', [rfReplaceAll]);
         page.Add('<h3>' + tmp + '</h3><br />');
         c2 := tmp;
         // 章タイトル・話タイトルがある
@@ -218,16 +232,16 @@ begin
           chap1 := '';
           chap2 := c2;
         end;
-      end else if Pos(AO_CPB, tmp) > 0 then  // 大見出しその２
+      end else if UTF8Pos(AO_CPB, tmp) > 0 then  // 大見出しその２
       begin
-        tmp := StringReplace(tmp, AO_CPB, '', [rfReplaceAll]);
-        tmp := StringReplace(tmp, AO_CPE, '', [rfReplaceAll]);
+        tmp := UTF8StringReplace(tmp, AO_CPB, '', [rfReplaceAll]);
+        tmp := UTF8StringReplace(tmp, AO_CPE, '', [rfReplaceAll]);
         page.Add('<h2>' + tmp + '</h2><br />');
         c1 := tmp;
-      end else if Pos(AO_SEB, tmp) > 0 then  // 中見出しその２
+      end else if UTF8Pos(AO_SEB, tmp) > 0 then  // 中見出しその２
       begin
-        tmp := StringReplace(tmp, AO_SEB, '', [rfReplaceAll]);
-        tmp := StringReplace(tmp, AO_SEE, '', [rfReplaceAll]);
+        tmp := UTF8StringReplace(tmp, AO_SEB, '', [rfReplaceAll]);
+        tmp := UTF8StringReplace(tmp, AO_SEE, '', [rfReplaceAll]);
         page.Add('<h3>' + tmp + '</h3><br />');
         c2 := tmp;
         if c1 <> '' then
@@ -239,11 +253,11 @@ begin
           chap1 := '';
           chap2 := c2;
         end;
-      end else if Pos(AO_KKR, tmp) > 0 then
+      end else if UTF8Pos(AO_KKR, tmp) > 0 then
       begin
         ; // スキップする
       // 改ページを各ページの最後とする
-      end else if Pos(AO_PB2, tmp) > 0 then
+      end else if UTF8Pos(AO_PB2, tmp) > 0 then
       begin
         // 青空文庫タグをHTMLタグに変換する
         page.Text := ReplaceTags(page.Text);
@@ -285,11 +299,19 @@ procedure TForm1.Button3Click(Sender: TObject);
 var
   dir: string;
 begin
+{$IFDEF FPC}
+  if DirectoryExists(EpubDir.Text) then
+{$ELSE}
   if System.SysUtils.DirectoryExists(EpubDir.Text) then
+{$ENDIF}
     dir := EpubDir.Text
   else
     dir := '';
+{$IFDEF FPC}
+  if SelectDirectory('Epubファイルを作成するフォルダを指定', '', dir) then
+{$ELSE}
   if SelectDirectory('Epubファイルを作成するフォルダを指定', '', dir, [sdNewUI, sdNewFolder]) then
+{$ENDIF}
     EpubDir.Text := dir;
 end;
 
@@ -338,7 +360,11 @@ begin
     MessageDlg('Epub変換するテキストファイルを指定して下さい.', mtWarning, [mbOK], 0);
     Exit;
   end;
+{$IFDEF FPC}
+  if not DirectoryExists(EpubDir.Text) then
+{$ELSE}
   if not System.SysUtils.DirectoryExists(EpubDir.Text) then
+{$ENDIF}
   begin
     MessageDlg('Epubファイルを作成するフォルダを指定して下さい.', mtWarning, [mbOK], 0);
     Exit;

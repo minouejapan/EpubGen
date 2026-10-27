@@ -1,0 +1,93 @@
+object Form1: TForm1
+  Left = 0
+  Height = 111
+  Top = 0
+  Width = 573
+  Caption = 'Text2Epub'
+  ClientHeight = 111
+  ClientWidth = 573
+  Color = clBtnFace
+  Font.CharSet = ANSI_CHARSET
+  Font.Color = clWindowText
+  Font.Height = -12
+  Font.Name = 'Meiryo UI'
+  LCLVersion = '4.8.0.0'
+  OnCloseQuery = FormCloseQuery
+  OnCreate = FormCreate
+  object Label1: TLabel
+    Left = 8
+    Height = 15
+    Top = 12
+    Width = 58
+    Caption = '入力ファイル'
+  end
+  object Label2: TLabel
+    Left = 8
+    Height = 15
+    Top = 41
+    Width = 62
+    Caption = 'Epubの場所'
+  end
+  object Label3: TLabel
+    Left = 344
+    Height = 15
+    Top = 84
+    Width = 36
+    Caption = '状態：'
+  end
+  object Status: TLabel
+    Left = 384
+    Height = 15
+    Top = 84
+    Width = 36
+    Caption = '待機中'
+  end
+  object Button1: TButton
+    Left = 476
+    Height = 25
+    Top = 77
+    Width = 89
+    Caption = 'Epub作成(&E)'
+    TabOrder = 0
+    OnClick = Button1Click
+  end
+  object TxtFile: TEdit
+    Left = 89
+    Height = 23
+    Top = 9
+    Width = 421
+    TabOrder = 1
+  end
+  object Button2: TButton
+    Left = 512
+    Height = 25
+    Top = 8
+    Width = 53
+    Caption = '参照...'
+    TabOrder = 2
+    OnClick = Button2Click
+  end
+  object EpubDir: TEdit
+    Left = 89
+    Height = 23
+    Top = 38
+    Width = 421
+    TabOrder = 3
+  end
+  object Button3: TButton
+    Left = 512
+    Height = 25
+    Top = 36
+    Width = 53
+    Caption = '参照...'
+    TabOrder = 4
+    OnClick = Button3Click
+  end
+  object OpenDialog1: TOpenDialog
+    Title = 'テキストファイルを指定する'
+    DefaultExt = '.txt'
+    Filter = 'テキストファイル(*.txt)|*.txt|すべてのファイル(*.*)|*.*'
+    Left = 32
+    Top = 56
+  end
+end
